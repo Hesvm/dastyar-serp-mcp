@@ -3,7 +3,7 @@ import { AuthManager } from '../src/auth.js';
 
 async function runAudit() {
   console.log('====================================================');
-  console.log('🚀 DASTYAR SERP MCP LIVE AUDIT SUITE');
+  console.log('🚀 DASTYAR SERP MCP FULL LIVE AUDIT SUITE (85 TOOLS)');
   console.log('====================================================\n');
 
   const token = AuthManager.getToken();
@@ -21,16 +21,21 @@ async function runAudit() {
     { name: 'Ad Review Queue', fn: () => SerpClient.getAdReviewQueue({ take: 5 }) },
     { name: 'Search Trends List', fn: () => SerpClient.listSearchTrends({ take: 5 }) },
     { name: 'Intent Suggestions List', fn: () => SerpClient.listIntentSuggestions({ take: 5 }) },
+    { name: 'Intent Events Stream', fn: () => SerpClient.listIntentEvents({ take: 5 }) },
     { name: 'Query Forms List', fn: () => SerpClient.listQueryForms({ take: 5 }) },
     { name: 'Keywords List', fn: () => SerpClient.listKeywords({ take: 5 }) },
     { name: 'Keyword Groups List', fn: () => SerpClient.listGroups({ take: 5 }) },
     { name: 'Live User Search Queries', fn: () => SerpClient.listUserSearchQueries({ take: 5 }) },
+    { name: 'Unmatched User Queries', fn: () => SerpClient.getUnmatchedUserQueries({ take: 5 }) },
     { name: 'Ad Events Stream', fn: () => SerpClient.listAdEvents({ take: 5 }) },
     { name: 'Global Ad Settings', fn: () => SerpClient.getAdSettings() },
     { name: 'Brands List', fn: () => SerpClient.listBrands({ take: 5 }) },
     { name: 'Services List', fn: () => SerpClient.listServices({ take: 5 }) },
+    { name: 'Images Media Assets', fn: () => SerpClient.listImages({ take: 5 }) },
+    { name: 'Admin Users Directory', fn: () => SerpClient.listUsers({ take: 5 }) },
     { name: 'Clustering Jobs', fn: () => SerpClient.listClusteringJobs({ take: 5 }) },
-    { name: 'Ad Line Daily Stats', fn: () => SerpClient.getAdLineDailyStats({ take: 5 }) }
+    { name: 'Ad Line Daily Stats', fn: () => SerpClient.getAdLineDailyStats({ take: 5 }) },
+    { name: 'Raw GraphQL Escape Hatch', fn: () => SerpClient.rawGraphql('{ authenticatedItem { ... on User { id email } } }') }
   ];
 
   let passed = 0;

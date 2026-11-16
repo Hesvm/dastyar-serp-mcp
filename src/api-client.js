@@ -35,7 +35,6 @@ export class SerpClient {
         const err = response.data.errors[0];
         const msg = err.message || JSON.stringify(err);
         
-        // Handle unauthorized / session expiry in Keystone
         if ((msg.toLowerCase().includes('access denied') || msg.toLowerCase().includes('not authenticated')) && AuthManager.hasCredentials() && retryCount < 1) {
           console.error('[SerpClient] Session expired. Attempting auto-login with credentials...');
           await AuthManager.autoLogin();
@@ -62,6 +61,13 @@ export class SerpClient {
       }
       throw error;
     }
+  }
+
+  // ==========================================
+  // 0. RAW GRAPHQL EXECUTION (ULTIMATE POWER)
+  // ==========================================
+  static async rawGraphql(query, variables = {}) {
+    return await this.graphql(query, variables);
   }
 
   // ==========================================
@@ -146,6 +152,19 @@ export class SerpClient {
     return (await this.graphql(query, { data })).createPromotion;
   }
 
+  static async bulkCreatePromotions(promotionsList) {
+    const query = `
+      mutation ($data: [PromotionCreateInput!]!) {
+        createPromotions(data: $data) {
+          id
+          name
+          isActive
+        }
+      }
+    `;
+    return (await this.graphql(query, { data: promotionsList })).createPromotions;
+  }
+
   static async updatePromotion(id, data) {
     const query = `
       mutation ($id: ID!, $data: PromotionUpdateInput!) {
@@ -162,6 +181,19 @@ export class SerpClient {
     return (await this.graphql(query, { id: String(id), data })).updatePromotion;
   }
 
+  static async bulkUpdatePromotions(updates) {
+    const query = `
+      mutation ($data: [PromotionUpdateArgs!]!) {
+        updatePromotions(data: $data) {
+          id
+          name
+          isActive
+        }
+      }
+    `;
+    return (await this.graphql(query, { data: updates })).updatePromotions;
+  }
+
   static async togglePromotionStatus(id, isActive) {
     return await this.updatePromotion(id, { isActive: Boolean(isActive) });
   }
@@ -176,6 +208,19 @@ export class SerpClient {
       }
     `;
     return (await this.graphql(query, { id: String(id) })).deletePromotion;
+  }
+
+  static async bulkDeletePromotions(ids) {
+    const where = ids.map(id => ({ id: String(id) }));
+    const query = `
+      mutation ($where: [PromotionWhereUniqueInput!]!) {
+        deletePromotions(where: $where) {
+          id
+          name
+        }
+      }
+    `;
+    return (await this.graphql(query, { where })).deletePromotions;
   }
 
   // ==========================================
@@ -269,6 +314,10 @@ export class SerpClient {
     return (await this.graphql(query, { id: String(id), data })).updateChatbotAd;
   }
 
+  static async toggleChatbotAdStatus(id, status) {
+    return await this.updateChatbotAd(id, { status });
+  }
+
   static async deleteChatbotAd(id) {
     const query = `
       mutation ($id: ID!) {
@@ -279,6 +328,19 @@ export class SerpClient {
       }
     `;
     return (await this.graphql(query, { id: String(id) })).deleteChatbotAd;
+  }
+
+  static async bulkDeleteChatbotAds(ids) {
+    const where = ids.map(id => ({ id: String(id) }));
+    const query = `
+      mutation ($where: [ChatbotAdWhereUniqueInput!]!) {
+        deleteChatbotAds(where: $where) {
+          id
+          internalTitle
+        }
+      }
+    `;
+    return (await this.graphql(query, { where })).deleteChatbotAds;
   }
 
   // ==========================================
@@ -441,6 +503,48 @@ export class SerpClient {
     return (await this.graphql(query, { id: String(id), judge: fullJudge, reason })).updateAdLine;
   }
 
+  static async bulkApproveAdLines(ids, note = 'Bulk Approved by Admin') {
+    const updates = ids.map(id => ({
+      where: { id: String(id) },
+      data: {
+        creativeStatus: "approved",
+        judge: { approved: true, note, timestamp: new Date().toISOString() }
+      }
+    }));
+    const query = `
+      mutation ($data: [AdLineUpdateArgs!]!) {
+        updateAdLines(data: $data) {
+          id
+          lineKey
+          creativeStatus
+        }
+      }
+    `;
+    return (await this.graphql(query, { data: updates })).updateAdLines;
+  }
+
+  static async bulkRejectAdLines(ids, reason = 'Bulk Rejected by Admin') {
+    const updates = ids.map(id => ({
+      where: { id: String(id) },
+      data: {
+        creativeStatus: "rejected",
+        statusReason: reason,
+        judge: { approved: false, reason, timestamp: new Date().toISOString() }
+      }
+    }));
+    const query = `
+      mutation ($data: [AdLineUpdateArgs!]!) {
+        updateAdLines(data: $data) {
+          id
+          lineKey
+          creativeStatus
+          statusReason
+        }
+      }
+    `;
+    return (await this.graphql(query, { data: updates })).updateAdLines;
+  }
+
   static async toggleAdLineManualPause(id, manualPause) {
     const query = `
       mutation ($id: ID!, $manualPause: Boolean!) {
@@ -498,6 +602,46 @@ export class SerpClient {
     `;
     const res = await this.graphql(query, { id: String(id) });
     return res.searchTrend;
+  }
+
+  static async createSearchTrend(data) {
+    const query = `
+      mutation ($data: SearchTrendCreateInput!) {
+        createSearchTrend(data: $data) {
+          id
+          name
+          volume
+          status
+        }
+      }
+    `;
+    return (await this.graphql(query, { data })).createSearchTrend;
+  }
+
+  static async updateSearchTrend(id, data) {
+    const query = `
+      mutation ($id: ID!, $data: SearchTrendUpdateInput!) {
+        updateSearchTrend(where: { id: $id }, data: $data) {
+          id
+          name
+          volume
+          status
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id), data })).updateSearchTrend;
+  }
+
+  static async deleteSearchTrend(id) {
+    const query = `
+      mutation ($id: ID!) {
+        deleteSearchTrend(where: { id: $id }) {
+          id
+          name
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id) })).deleteSearchTrend;
   }
 
   static async listIntentSuggestions({ status = 'pending', take = 20, skip = 0 } = {}) {
@@ -578,6 +722,42 @@ export class SerpClient {
     return (await this.graphql(query, { survivorId: parseInt(survivorId), loserIds })).createIntentMergeSuggestion;
   }
 
+  // ==========================================
+  // 6. INTENT EVENTS & QUERY FORMS
+  // ==========================================
+  static async listIntentEvents({ intentId = null, take = 50, skip = 0 } = {}) {
+    const where = {};
+    if (intentId) where.intentId = { equals: parseInt(intentId) };
+    const query = `
+      query ($where: IntentEventWhereInput, $take: Int!, $skip: Int!) {
+        intentEvents(where: $where, take: $take, skip: $skip, orderBy: [{ id: desc }]) {
+          id
+          intentId
+          type
+          actor
+          payload
+          createdAt
+        }
+        intentEventsCount(where: $where)
+      }
+    `;
+    return await this.graphql(query, { where, take, skip });
+  }
+
+  static async createIntentEvent(data) {
+    const query = `
+      mutation ($data: IntentEventCreateInput!) {
+        createIntentEvent(data: $data) {
+          id
+          type
+          actor
+          createdAt
+        }
+      }
+    `;
+    return (await this.graphql(query, { data })).createIntentEvent;
+  }
+
   static async listQueryForms({ take = 50, skip = 0, where = {}, orderBy = [{ searchCount: 'desc' }] } = {}) {
     const query = `
       query ($take: Int!, $skip: Int!, $where: QueryFormWhereInput, $orderBy: [QueryFormOrderByInput!]) {
@@ -599,6 +779,76 @@ export class SerpClient {
     return await this.graphql(query, { take, skip, where, orderBy });
   }
 
+  static async getQueryFormDetails(id) {
+    const query = `
+      query ($id: ID!) {
+        queryForm(where: { id: $id }) {
+          id
+          hash
+          text
+          source
+          searchCount
+          adShownCount
+          intentId
+          assignedBy
+          confidence
+          pinned
+        }
+      }
+    `;
+    const res = await this.graphql(query, { id: String(id) });
+    return res.queryForm;
+  }
+
+  static async createQueryForm(data) {
+    const query = `
+      mutation ($data: QueryFormCreateInput!) {
+        createQueryForm(data: $data) {
+          id
+          text
+          intentId
+          confidence
+          pinned
+        }
+      }
+    `;
+    return (await this.graphql(query, { data })).createQueryForm;
+  }
+
+  static async updateQueryForm(id, data) {
+    const query = `
+      mutation ($id: ID!, $data: QueryFormUpdateInput!) {
+        updateQueryForm(where: { id: $id }, data: $data) {
+          id
+          text
+          intentId
+          confidence
+          pinned
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id), data })).updateQueryForm;
+  }
+
+  static async pinQueryForm(id, pinned = true) {
+    return await this.updateQueryForm(id, { pinned: Boolean(pinned) });
+  }
+
+  static async deleteQueryForm(id) {
+    const query = `
+      mutation ($id: ID!) {
+        deleteQueryForm(where: { id: $id }) {
+          id
+          text
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id) })).deleteQueryForm;
+  }
+
+  // ==========================================
+  // 7. AI CLUSTERING JOBS
+  // ==========================================
   static async listClusteringJobs({ take = 20, skip = 0, where = {}, orderBy = [{ createdAt: 'desc' }] } = {}) {
     const query = `
       query ($take: Int!, $skip: Int!, $where: ClusteringJobWhereInput, $orderBy: [ClusteringJobOrderByInput!]) {
@@ -618,8 +868,53 @@ export class SerpClient {
     return await this.graphql(query, { take, skip, where, orderBy });
   }
 
+  static async getClusteringJobDetails(id) {
+    const query = `
+      query ($id: ID!) {
+        clusteringJob(where: { id: $id }) {
+          id
+          type
+          status
+          queryCount
+          processingProgress
+          processedCount
+          logs
+          createdAt
+        }
+      }
+    `;
+    const res = await this.graphql(query, { id: String(id) });
+    return res.clusteringJob;
+  }
+
+  static async createClusteringJob(data) {
+    const query = `
+      mutation ($data: ClusteringJobCreateInput!) {
+        createClusteringJob(data: $data) {
+          id
+          type
+          status
+          createdAt
+        }
+      }
+    `;
+    return (await this.graphql(query, { data })).createClusteringJob;
+  }
+
+  static async updateClusteringJobStatus(id, status) {
+    const query = `
+      mutation ($id: ID!, $status: String!) {
+        updateClusteringJob(where: { id: $id }, data: { status: $status }) {
+          id
+          status
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id), status })).updateClusteringJob;
+  }
+
   // ==========================================
-  // 6. KEYWORDS & GROUPS
+  // 8. KEYWORDS & GROUPS
   // ==========================================
   static async listKeywords({ take = 50, skip = 0, where = {}, orderBy = [{ id: 'desc' }] } = {}) {
     const query = `
@@ -637,6 +932,24 @@ export class SerpClient {
       }
     `;
     return await this.graphql(query, { take, skip, where, orderBy });
+  }
+
+  static async getKeywordDetails(id) {
+    const query = `
+      query ($id: ID!) {
+        keyword(where: { id: $id }) {
+          id
+          name
+          type
+          groups {
+            id
+            name
+          }
+        }
+      }
+    `;
+    const res = await this.graphql(query, { id: String(id) });
+    return res.keyword;
   }
 
   static async createKeyword({ name, type = 'phrase', groupIds = [] }) {
@@ -662,16 +975,29 @@ export class SerpClient {
   }
 
   static async bulkCreateKeywords(keywordsList) {
-    const results = [];
-    for (const kw of keywordsList) {
-      try {
-        const item = await this.createKeyword(kw);
-        results.push({ success: true, item });
-      } catch (err) {
-        results.push({ success: false, name: kw.name, error: err.message });
+    const query = `
+      mutation ($data: [KeywordCreateInput!]!) {
+        createKeywords(data: $data) {
+          id
+          name
+          type
+        }
       }
-    }
-    return results;
+    `;
+    return (await this.graphql(query, { data: keywordsList })).createKeywords;
+  }
+
+  static async updateKeyword(id, data) {
+    const query = `
+      mutation ($id: ID!, $data: KeywordUpdateInput!) {
+        updateKeyword(where: { id: $id }, data: $data) {
+          id
+          name
+          type
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id), data })).updateKeyword;
   }
 
   static async deleteKeyword(id) {
@@ -684,6 +1010,19 @@ export class SerpClient {
       }
     `;
     return (await this.graphql(query, { id: String(id) })).deleteKeyword;
+  }
+
+  static async bulkDeleteKeywords(ids) {
+    const where = ids.map(id => ({ id: String(id) }));
+    const query = `
+      mutation ($where: [KeywordWhereUniqueInput!]!) {
+        deleteKeywords(where: $where) {
+          id
+          name
+        }
+      }
+    `;
+    return (await this.graphql(query, { where })).deleteKeywords;
   }
 
   static async listGroups({ take = 50, skip = 0, where = {} } = {}) {
@@ -712,8 +1051,32 @@ export class SerpClient {
     return (await this.graphql(query, { name })).createGroup;
   }
 
+  static async updateGroup(id, name) {
+    const query = `
+      mutation ($id: ID!, $name: String!) {
+        updateGroup(where: { id: $id }, data: { name: $name }) {
+          id
+          name
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id), name })).updateGroup;
+  }
+
+  static async deleteGroup(id) {
+    const query = `
+      mutation ($id: ID!) {
+        deleteGroup(where: { id: $id }) {
+          id
+          name
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id) })).deleteGroup;
+  }
+
   // ==========================================
-  // 7. USER SEARCH QUERIES & LIVE TELEMETRY
+  // 9. USER SEARCH QUERIES & LIVE TELEMETRY
   // ==========================================
   static async listUserSearchQueries({ take = 50, skip = 0, where = {}, orderBy = [{ createdAt: 'desc' }] } = {}) {
     const query = `
@@ -761,6 +1124,24 @@ export class SerpClient {
     `;
     const res = await this.graphql(query, { id: String(id) });
     return res.userSearchQuery;
+  }
+
+  static async getUnmatchedUserQueries({ take = 50, skip = 0, search = null } = {}) {
+    const where = { adShown: { equals: false } };
+    if (search) where.query = { contains: search };
+    return await this.listUserSearchQueries({ take, skip, where });
+  }
+
+  static async deleteUserSearchQuery(id) {
+    const query = `
+      mutation ($id: ID!) {
+        deleteUserSearchQuery(where: { id: $id }) {
+          id
+          query
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id) })).deleteUserSearchQuery;
   }
 
   static async listAdEvents({ take = 50, skip = 0, where = {}, orderBy = [{ id: 'desc' }] } = {}) {
@@ -820,7 +1201,7 @@ export class SerpClient {
   }
 
   // ==========================================
-  // 8. STATS & ANALYTICS
+  // 10. STATS & ANALYTICS
   // ==========================================
   static async getAdLineDailyStats({ lineId = null, campaignId = null, day = null, take = 50, skip = 0 } = {}) {
     const where = {};
@@ -897,7 +1278,7 @@ export class SerpClient {
   }
 
   // ==========================================
-  // 9. BRANDS & SERVICES
+  // 11. BRANDS & SERVICES
   // ==========================================
   static async listBrands({ take = 20, skip = 0, where = {}, orderBy = [{ id: 'desc' }] } = {}) {
     const query = `
@@ -976,6 +1357,18 @@ export class SerpClient {
     return (await this.graphql(query, { id: String(id), data })).updateBrand;
   }
 
+  static async deleteBrand(id) {
+    const query = `
+      mutation ($id: ID!) {
+        deleteBrand(where: { id: $id }) {
+          id
+          name
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id) })).deleteBrand;
+  }
+
   static async listServices({ take = 20, skip = 0, where = {}, orderBy = [{ id: 'desc' }] } = {}) {
     const query = `
       query ($take: Int!, $skip: Int!, $where: ServiceWhereInput, $orderBy: [ServiceOrderByInput!]) {
@@ -1020,5 +1413,158 @@ export class SerpClient {
     `;
     const res = await this.graphql(query, { id: String(id) });
     return res.service;
+  }
+
+  static async createService(data) {
+    const query = `
+      mutation ($data: ServiceCreateInput!) {
+        createService(data: $data) {
+          id
+          name
+          trustRate
+        }
+      }
+    `;
+    return (await this.graphql(query, { data })).createService;
+  }
+
+  static async updateService(id, data) {
+    const query = `
+      mutation ($id: ID!, $data: ServiceUpdateInput!) {
+        updateService(where: { id: $id }, data: $data) {
+          id
+          name
+          trustRate
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id), data })).updateService;
+  }
+
+  static async deleteService(id) {
+    const query = `
+      mutation ($id: ID!) {
+        deleteService(where: { id: $id }) {
+          id
+          name
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id) })).deleteService;
+  }
+
+  // ==========================================
+  // 12. IMAGES (ASSETS)
+  // ==========================================
+  static async listImages({ take = 20, skip = 0, where = {}, orderBy = [{ id: 'desc' }] } = {}) {
+    const query = `
+      query ($take: Int!, $skip: Int!, $where: ImageWhereInput, $orderBy: [ImageOrderByInput!]) {
+        images(take: $take, skip: $skip, where: $where, orderBy: $orderBy) {
+          id
+          name
+          image {
+            url
+          }
+          servicesCount
+        }
+        imagesCount(where: $where)
+      }
+    `;
+    return await this.graphql(query, { take, skip, where, orderBy });
+  }
+
+  static async getImageDetails(id) {
+    const query = `
+      query ($id: ID!) {
+        image(where: { id: $id }) {
+          id
+          name
+          image {
+            url
+          }
+          services {
+            id
+            name
+          }
+        }
+      }
+    `;
+    const res = await this.graphql(query, { id: String(id) });
+    return res.image;
+  }
+
+  static async deleteImage(id) {
+    const query = `
+      mutation ($id: ID!) {
+        deleteImage(where: { id: $id }) {
+          id
+          name
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id) })).deleteImage;
+  }
+
+  // ==========================================
+  // 13. USERS (ADMIN TEAM)
+  // ==========================================
+  static async listUsers({ take = 20, skip = 0, where = {}, orderBy = [{ id: 'desc' }] } = {}) {
+    const query = `
+      query ($take: Int!, $skip: Int!, $where: UserWhereInput, $orderBy: [UserOrderByInput!]) {
+        users(take: $take, skip: $skip, where: $where, orderBy: $orderBy) {
+          id
+          name
+          email
+          isAdmin
+          createdAt
+        }
+        usersCount(where: $where)
+      }
+    `;
+    return await this.graphql(query, { take, skip, where, orderBy });
+  }
+
+  static async getUserDetails(id) {
+    const query = `
+      query ($id: ID!) {
+        user(where: { id: $id }) {
+          id
+          name
+          email
+          isAdmin
+          createdAt
+        }
+      }
+    `;
+    const res = await this.graphql(query, { id: String(id) });
+    return res.user;
+  }
+
+  static async createUser(data) {
+    const query = `
+      mutation ($data: UserCreateInput!) {
+        createUser(data: $data) {
+          id
+          name
+          email
+          isAdmin
+        }
+      }
+    `;
+    return (await this.graphql(query, { data })).createUser;
+  }
+
+  static async updateUser(id, data) {
+    const query = `
+      mutation ($id: ID!, $data: UserUpdateInput!) {
+        updateUser(where: { id: $id }, data: $data) {
+          id
+          name
+          email
+          isAdmin
+        }
+      }
+    `;
+    return (await this.graphql(query, { id: String(id), data })).updateUser;
   }
 }

@@ -31,6 +31,26 @@ const errorResponse = (err) => ({
 });
 
 // ==========================================
+// 0. RAW GRAPHQL (THE ULTIMATE ESCAPE HATCH)
+// ==========================================
+server.tool(
+  "serp_raw_graphql_query",
+  "Execute ANY arbitrary GraphQL query or mutation against https://serp.dastyar.io/api/graphql. Provides 100% direct coverage for any custom query or mutation.",
+  {
+    query: z.string().describe("The GraphQL query or mutation string"),
+    variables: z.record(z.any()).optional().describe("Variables dictionary for the GraphQL query")
+  },
+  async ({ query, variables }) => {
+    try {
+      const result = await SerpClient.rawGraphql(query, variables || {});
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+// ==========================================
 // 1. AUTHENTICATION & PROFILE
 // ==========================================
 server.tool(
@@ -167,6 +187,30 @@ server.tool(
 );
 
 server.tool(
+  "serp_bulk_create_promotions",
+  "Batch create multiple promotions on Dastyar SERP.",
+  {
+    promotions: z.array(
+      z.object({
+        name: z.string(),
+        keywordsNew: z.string(),
+        content: z.string().optional(),
+        richTextNew: z.string().optional(),
+        isActive: z.boolean().optional().default(true)
+      })
+    ).describe("List of promotion objects to create")
+  },
+  async ({ promotions }) => {
+    try {
+      const result = await SerpClient.bulkCreatePromotions(promotions);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
   "serp_update_promotion",
   "Update an existing promotion by ID.",
   {
@@ -182,6 +226,28 @@ server.tool(
   async ({ id, ...data }) => {
     try {
       const result = await SerpClient.updatePromotion(id, data);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_bulk_update_promotions",
+  "Update multiple promotions in a single batch request.",
+  {
+    updates: z.array(
+      z.object({
+        id: z.string(),
+        data: z.record(z.any())
+      })
+    ).describe("Array of update directives: [{ id, data }]")
+  },
+  async ({ updates }) => {
+    try {
+      const formatted = updates.map(u => ({ where: { id: u.id }, data: u.data }));
+      const result = await SerpClient.bulkUpdatePromotions(formatted);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
@@ -215,6 +281,22 @@ server.tool(
   async ({ id }) => {
     try {
       const result = await SerpClient.deletePromotion(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_bulk_delete_promotions",
+  "Bulk delete multiple promotions by their IDs.",
+  {
+    ids: z.array(z.string()).describe("Array of promotion IDs to delete")
+  },
+  async ({ ids }) => {
+    try {
+      const result = await SerpClient.bulkDeletePromotions(ids);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
@@ -279,11 +361,10 @@ server.tool(
     ctaText: z.string().optional().describe("CTA button text (e.g. خرید با تخفیف)"),
     ctaUrl: z.string().optional().describe("CTA destination URL"),
     brandId: z.string().optional().describe("Associated brand ID"),
-    adType: z.string().optional().default("post_response_banner").describe("Ad type"),
+    adType: z.string().optional().default("post_answer").describe("Ad type (post_answer, sponsored_followup)"),
     status: z.string().optional().default("active").describe("Status (active/paused)"),
-    triggerKeywords: z.string().optional().describe("Exact trigger keywords"),
-    toneKeywords: z.string().optional().describe("Semantic tone keywords"),
-    sentimentScore: z.number().optional().describe("Sentiment threshold score")
+    targetKeywords: z.string().optional().describe("Target keywords for triggering"),
+    minConfidenceOverride: z.number().optional().describe("Minimum confidence override")
   },
   async ({ brandId, ...data }) => {
     try {
@@ -310,12 +391,29 @@ server.tool(
     ctaText: z.string().optional().describe("CTA button text"),
     ctaUrl: z.string().optional().describe("CTA link"),
     status: z.string().optional().describe("Status (active/paused)"),
-    triggerKeywords: z.string().optional().describe("Trigger keywords"),
-    toneKeywords: z.string().optional().describe("Tone keywords")
+    targetKeywords: z.string().optional().describe("Target keywords"),
+    minConfidenceOverride: z.number().optional().describe("Confidence override")
   },
   async ({ id, ...data }) => {
     try {
       const result = await SerpClient.updateChatbotAd(id, data);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_toggle_chatbot_ad_status",
+  "Toggle status of a Chatbot Ad between active and paused.",
+  {
+    id: z.string().describe("Chatbot Ad ID"),
+    status: z.enum(["active", "paused"]).describe("New status")
+  },
+  async ({ id, status }) => {
+    try {
+      const result = await SerpClient.toggleChatbotAdStatus(id, status);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
@@ -332,6 +430,22 @@ server.tool(
   async ({ id }) => {
     try {
       const result = await SerpClient.deleteChatbotAd(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_bulk_delete_chatbot_ads",
+  "Bulk delete multiple Hooshang Chatbot Ads by ID.",
+  {
+    ids: z.array(z.string()).describe("Array of Chatbot Ad IDs")
+  },
+  async ({ ids }) => {
+    try {
+      const result = await SerpClient.bulkDeleteChatbotAds(ids);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
@@ -471,6 +585,40 @@ server.tool(
 );
 
 server.tool(
+  "serp_bulk_approve_ad_lines",
+  "Bulk approve multiple ad lines in the review queue.",
+  {
+    ids: z.array(z.string()).describe("Array of Ad Line IDs"),
+    note: z.string().optional().default("Bulk Approved via MCP Agent")
+  },
+  async ({ ids, note }) => {
+    try {
+      const result = await SerpClient.bulkApproveAdLines(ids, note);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_bulk_reject_ad_lines",
+  "Bulk reject multiple ad lines in the review queue with a common reason.",
+  {
+    ids: z.array(z.string()).describe("Array of Ad Line IDs"),
+    reason: z.string().describe("Rejection reason")
+  },
+  async ({ ids, reason }) => {
+    try {
+      const result = await SerpClient.bulkRejectAdLines(ids, reason);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
   "serp_toggle_ad_line_manual_pause",
   "Manually pause or resume an ad line.",
   {
@@ -521,6 +669,60 @@ server.tool(
   async ({ id }) => {
     try {
       const result = await SerpClient.getSearchTrendDetails(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_create_search_trend",
+  "Create a new search trend / intent manually.",
+  {
+    name: z.string().describe("Intent name / trend title"),
+    volume: z.number().optional().default(100).describe("Monthly search volume estimate"),
+    source: z.string().optional().default("manual").describe("Source of the trend"),
+    status: z.string().optional().default("active").describe("Status")
+  },
+  async (payload) => {
+    try {
+      const result = await SerpClient.createSearchTrend(payload);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_update_search_trend",
+  "Update a search trend by ID.",
+  {
+    id: z.string().describe("Search Trend ID"),
+    name: z.string().optional().describe("Name"),
+    volume: z.number().optional().describe("Volume"),
+    status: z.string().optional().describe("Status")
+  },
+  async ({ id, ...data }) => {
+    try {
+      const result = await SerpClient.updateSearchTrend(id, data);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_delete_search_trend",
+  "Delete a search trend by ID.",
+  {
+    id: z.string().describe("Search Trend ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.deleteSearchTrend(id);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
@@ -609,6 +811,43 @@ server.tool(
 );
 
 server.tool(
+  "serp_list_intent_events",
+  "List audit events for intent lifecycle changes (merges, relabels, split actions).",
+  {
+    intentId: z.string().optional().describe("Filter by intent ID"),
+    take: z.number().optional().default(50).describe("Number of items"),
+    skip: z.number().optional().default(0).describe("Offset")
+  },
+  async (params) => {
+    try {
+      const result = await SerpClient.listIntentEvents(params);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_create_intent_event",
+  "Log an administrative intent event in the audit trail.",
+  {
+    intentId: z.number().describe("Associated intent ID"),
+    type: z.string().describe("Event type (e.g. merge, relabel, split)"),
+    actor: z.string().optional().default("admin").describe("Actor name / ID"),
+    payload: z.record(z.any()).optional().describe("Event metadata payload")
+  },
+  async (payload) => {
+    try {
+      const result = await SerpClient.createIntentEvent(payload);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
   "serp_list_query_forms",
   "List query text variations (Query Forms) and their mapped intents with search frequencies.",
   {
@@ -631,6 +870,97 @@ server.tool(
 );
 
 server.tool(
+  "serp_get_query_form_details",
+  "Get details of a query form.",
+  {
+    id: z.string().describe("Query form ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.getQueryFormDetails(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_create_query_form",
+  "Create a new query form mapped to an intent.",
+  {
+    text: z.string().describe("Query text"),
+    intentId: z.number().describe("Target intent ID"),
+    hash: z.string().optional().describe("Unique query hash"),
+    confidence: z.number().optional().default(1.0).describe("Mapping confidence"),
+    pinned: z.boolean().optional().default(false).describe("Whether the form is pinned")
+  },
+  async (payload) => {
+    try {
+      const result = await SerpClient.createQueryForm(payload);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_update_query_form",
+  "Update an existing query form mapping or confidence.",
+  {
+    id: z.string().describe("Query Form ID"),
+    intentId: z.number().optional().describe("New intent ID"),
+    confidence: z.number().optional().describe("Confidence score"),
+    pinned: z.boolean().optional().describe("Pinned state")
+  },
+  async ({ id, ...data }) => {
+    try {
+      const result = await SerpClient.updateQueryForm(id, data);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_pin_query_form",
+  "Pin or unpin a query form to lock its intent assignment.",
+  {
+    id: z.string().describe("Query Form ID"),
+    pinned: z.boolean().describe("True to pin, False to unpin")
+  },
+  async ({ id, pinned }) => {
+    try {
+      const result = await SerpClient.pinQueryForm(id, pinned);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_delete_query_form",
+  "Delete a query form.",
+  {
+    id: z.string().describe("Query Form ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.deleteQueryForm(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+// ==========================================
+// 7. AI CLUSTERING JOBS
+// ==========================================
+server.tool(
   "serp_list_clustering_jobs",
   "List background clustering jobs, progress, and logs.",
   {
@@ -647,8 +977,59 @@ server.tool(
   }
 );
 
+server.tool(
+  "serp_get_clustering_job_details",
+  "Get details, progress, and execution logs of an AI clustering job.",
+  {
+    id: z.string().describe("Clustering Job ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.getClusteringJobDetails(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_create_clustering_job",
+  "Queue a new query clustering job.",
+  {
+    type: z.string().optional().default("manual").describe("Job type (e.g. manual, cron)"),
+    status: z.string().optional().default("pending").describe("Initial status"),
+    queryCount: z.number().optional().default(1000).describe("Target query batch count")
+  },
+  async (payload) => {
+    try {
+      const result = await SerpClient.createClusteringJob(payload);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_update_clustering_job_status",
+  "Cancel or update status of a clustering job.",
+  {
+    id: z.string().describe("Job ID"),
+    status: z.string().describe("New status (e.g. completed, failed, cancelled)")
+  },
+  async ({ id, status }) => {
+    try {
+      const result = await SerpClient.updateClusteringJobStatus(id, status);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
 // ==========================================
-// 7. KEYWORDS & GROUPS
+// 8. KEYWORDS & GROUPS
 // ==========================================
 server.tool(
   "serp_list_keywords",
@@ -665,6 +1046,22 @@ server.tool(
       if (search) where.name = { contains: search };
       if (type) where.type = { equals: type };
       const result = await SerpClient.listKeywords({ take, skip, where });
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_get_keyword_details",
+  "Get details of a single keyword.",
+  {
+    id: z.string().describe("Keyword ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.getKeywordDetails(id);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
@@ -697,8 +1094,7 @@ server.tool(
     keywords: z.array(
       z.object({
         name: z.string().describe("Keyword text"),
-        type: z.enum(["phrase", "exact", "broad"]).optional().default("phrase"),
-        groupIds: z.array(z.string()).optional()
+        type: z.enum(["phrase", "exact", "broad"]).optional().default("phrase")
       })
     ).describe("Array of keywords to create")
   },
@@ -716,6 +1112,24 @@ server.tool(
 );
 
 server.tool(
+  "serp_update_keyword",
+  "Update a keyword's text or match type.",
+  {
+    id: z.string().describe("Keyword ID"),
+    name: z.string().optional().describe("Keyword text"),
+    type: z.enum(["phrase", "exact", "broad"]).optional().describe("Match type")
+  },
+  async ({ id, ...data }) => {
+    try {
+      const result = await SerpClient.updateKeyword(id, data);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
   "serp_delete_keyword",
   "Delete a keyword by ID.",
   {
@@ -724,6 +1138,22 @@ server.tool(
   async ({ id }) => {
     try {
       const result = await SerpClient.deleteKeyword(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_bulk_delete_keywords",
+  "Bulk delete multiple keywords by ID.",
+  {
+    ids: z.array(z.string()).describe("Array of keyword IDs")
+  },
+  async ({ ids }) => {
+    try {
+      const result = await SerpClient.bulkDeleteKeywords(ids);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
@@ -767,8 +1197,41 @@ server.tool(
   }
 );
 
+server.tool(
+  "serp_update_group",
+  "Update a keyword group name.",
+  {
+    id: z.string().describe("Group ID"),
+    name: z.string().describe("New group name")
+  },
+  async ({ id, name }) => {
+    try {
+      const result = await SerpClient.updateGroup(id, name);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_delete_group",
+  "Delete a keyword group by ID.",
+  {
+    id: z.string().describe("Group ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.deleteGroup(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
 // ==========================================
-// 8. LIVE TELEMETRY & USER QUERIES
+// 9. LIVE TELEMETRY & USER QUERIES
 // ==========================================
 server.tool(
   "serp_list_user_search_queries",
@@ -801,6 +1264,40 @@ server.tool(
   async ({ id }) => {
     try {
       const result = await SerpClient.getUserSearchQueryDetails(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_get_unmatched_user_queries",
+  "Find queries where NO ad was shown (adShown: false) to uncover untapped commercial demand.",
+  {
+    take: z.number().optional().default(50).describe("Number of items"),
+    skip: z.number().optional().default(0).describe("Offset"),
+    search: z.string().optional().describe("Optional keyword search")
+  },
+  async (params) => {
+    try {
+      const result = await SerpClient.getUnmatchedUserQueries(params);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_delete_user_search_query",
+  "Delete a user search query log.",
+  {
+    id: z.string().describe("Query ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.deleteUserSearchQuery(id);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
@@ -866,7 +1363,7 @@ server.tool(
 );
 
 // ==========================================
-// 9. PERFORMANCE STATS & ANALYTICS
+// 10. PERFORMANCE STATS & ANALYTICS
 // ==========================================
 server.tool(
   "serp_get_adline_daily_stats",
@@ -928,7 +1425,7 @@ server.tool(
 );
 
 // ==========================================
-// 10. BRANDS & SERVICES DIRECTORY
+// 11. BRANDS & SERVICES DIRECTORY
 // ==========================================
 server.tool(
   "serp_list_brands",
@@ -1012,6 +1509,22 @@ server.tool(
 );
 
 server.tool(
+  "serp_delete_brand",
+  "Delete a brand profile by ID.",
+  {
+    id: z.string().describe("Brand ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.deleteBrand(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
   "serp_list_services",
   "List services associated with brands.",
   {
@@ -1040,6 +1553,197 @@ server.tool(
   async ({ id }) => {
     try {
       const result = await SerpClient.getServiceDetails(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_create_service",
+  "Create a new service listing under a brand.",
+  {
+    name: z.string().describe("Service name"),
+    brandId: z.string().describe("Associated brand ID"),
+    description: z.string().optional().describe("Service description"),
+    keywords: z.string().optional().describe("Service keywords"),
+    url: z.string().optional().describe("Landing page URL"),
+    ctaText: z.string().optional().describe("CTA button text"),
+    trustRate: z.number().optional().describe("Trust rate (e.g. 95)"),
+    industry: z.string().optional().describe("Industry category")
+  },
+  async ({ brandId, ...data }) => {
+    try {
+      const payload = {
+        ...data,
+        brand: { connect: { id: brandId } }
+      };
+      const result = await SerpClient.createService(payload);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_update_service",
+  "Update service details.",
+  {
+    id: z.string().describe("Service ID"),
+    name: z.string().optional().describe("Name"),
+    description: z.string().optional().describe("Description"),
+    keywords: z.string().optional().describe("Keywords"),
+    url: z.string().optional().describe("URL"),
+    ctaText: z.string().optional().describe("CTA Text"),
+    trustRate: z.number().optional().describe("Trust rate")
+  },
+  async ({ id, ...data }) => {
+    try {
+      const result = await SerpClient.updateService(id, data);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_delete_service",
+  "Delete a service listing.",
+  {
+    id: z.string().describe("Service ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.deleteService(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+// ==========================================
+// 12. IMAGES (ASSETS)
+// ==========================================
+server.tool(
+  "serp_list_images",
+  "List uploaded media assets and icons.",
+  {
+    take: z.number().optional().default(20).describe("Number of items"),
+    skip: z.number().optional().default(0).describe("Offset")
+  },
+  async (params) => {
+    try {
+      const result = await SerpClient.listImages(params);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_get_image_details",
+  "Get details and direct S3 URL of an image asset.",
+  {
+    id: z.string().describe("Image ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.getImageDetails(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_delete_image",
+  "Delete an image asset by ID.",
+  {
+    id: z.string().describe("Image ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.deleteImage(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+// ==========================================
+// 13. USERS (ADMIN TEAM)
+// ==========================================
+server.tool(
+  "serp_list_users",
+  "List administrative users of Dastyar SERP.",
+  {
+    take: z.number().optional().default(20).describe("Number of items"),
+    skip: z.number().optional().default(0).describe("Offset")
+  },
+  async (params) => {
+    try {
+      const result = await SerpClient.listUsers(params);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_get_user_details",
+  "Get details of a user/admin account.",
+  {
+    id: z.string().describe("User ID")
+  },
+  async ({ id }) => {
+    try {
+      const result = await SerpClient.getUserDetails(id);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_create_user",
+  "Create a new administrative user.",
+  {
+    name: z.string().describe("Full name"),
+    email: z.string().email().describe("Email address"),
+    password: z.string().describe("Password"),
+    isAdmin: z.boolean().optional().default(true).describe("Admin privilege")
+  },
+  async (payload) => {
+    try {
+      const result = await SerpClient.createUser(payload);
+      return jsonResponse(result);
+    } catch (err) {
+      return errorResponse(err);
+    }
+  }
+);
+
+server.tool(
+  "serp_update_user",
+  "Update a user's details or admin status.",
+  {
+    id: z.string().describe("User ID"),
+    name: z.string().optional().describe("Name"),
+    email: z.string().email().optional().describe("Email"),
+    isAdmin: z.boolean().optional().describe("Admin status")
+  },
+  async ({ id, ...data }) => {
+    try {
+      const result = await SerpClient.updateUser(id, data);
       return jsonResponse(result);
     } catch (err) {
       return errorResponse(err);
