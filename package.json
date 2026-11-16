@@ -1,0 +1,42 @@
+{
+  "name": "dastyar-serp-mcp",
+  "version": "1.0.0",
+  "description": "Comprehensive Model Context Protocol (MCP) Server for Dastyar SERP & Ads Engine (serp.dastyar.io) with KeystoneJS GraphQL, live search queries, promotions, Hooshang chatbot ads, ad lines review queue, and intent clusters.",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "dastyar-serp-mcp": "./bin/cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "start": "node bin/cli.js",
+    "login": "node bin/cli.js login",
+    "status": "node bin/cli.js status",
+    "test": "node src/test-connection.js",
+    "audit": "node scripts/audit-tools.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "dastyar",
+    "serp",
+    "advertising",
+    "chatbot-ads",
+    "hooshang",
+    "keystonejs",
+    "graphql",
+    "antigravity",
+    "claude-desktop",
+    "cursor"
+  ],
+  "author": "Hesam Mousavi (Hesvm)",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.1",
+    "axios": "^1.8.1",
+    "dotenv": "^16.4.7",
+    "zod": "^3.24.2"
+  }
+}
